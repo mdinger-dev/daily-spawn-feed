@@ -39,13 +39,13 @@
          letter-spacing:1px;padding:2px 8px;border-radius:6px;vertical-align:2px;margin-right:8px}
   h2.ep-title{font-size:1.15rem;line-height:1.35;font-weight:700}
   .featured h2.ep-title{font-size:1.45rem}
-  audio{width:100%;margin-top:14px;height:40px}
+  .player{width:100%;height:110px;border:0;border-radius:12px;margin-top:14px;background:#000}
+  .openmp3{display:inline-block;margin-top:8px;font-size:.85rem}
   .summary{color:#cdd6f2;margin-top:12px;line-height:1.55;font-size:.97rem}
   .chapters{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
   .chapters h3{font-size:.78rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-  .chapters button{display:flex;width:100%;gap:12px;align-items:baseline;background:none;border:none;color:var(--text);
-    font:inherit;font-size:.95rem;text-align:left;padding:6px 8px;border-radius:8px;cursor:pointer}
-  .chapters button:hover{background:rgba(255,255,255,.06)}
+  .chapters .row{display:flex;width:100%;gap:12px;align-items:baseline;color:var(--text);
+    font-size:.95rem;text-align:left;padding:6px 8px}
   .chapters .t{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:700;flex:none}
   .status{text-align:center;color:var(--muted);padding:40px 0}
   footer{text-align:center;color:var(--muted);font-size:.85rem;margin-top:44px;line-height:1.7}
@@ -91,6 +91,14 @@
   function txt(el, sel){ var n = el.querySelector(sel); return n ? n.textContent.trim() : ''; }
   function attr(el, sel, name){ var n = el.querySelector(sel); return n ? (n.getAttribute(name) || '') : ''; }
 
+  /* Google Drive download URLs carry Cross-Origin-Resource-Policy: same-site,
+     so browsers refuse to load them as <img>/<audio> subresources from another
+     site. Images are served instead from lh3.googleusercontent.com (no CORP
+     block), and audio plays through Drive's sanctioned /preview embed. */
+  function driveId(url){ var m = /[?&]id=([^&]+)/.exec(url || ''); return m ? m[1] : ''; }
+  function imgUrl(url){ var id = driveId(url); return id ? 'https://lh3.googleusercontent.com/d/' + id + '=w1000' : url; }
+  function embedUrl(url){ var id = driveId(url); return id ? 'https://drive.google.com/file/d/' + id + '/preview' : url; }
+
   function parseChapters(desc){
     var chapters = [], summary = desc, idx = desc.search(/chapters\s*:/i);
     if (idx >= 0){
@@ -118,7 +126,7 @@
     card.className = 'card' + (featured ? ' featured' : '');
 
     var head = document.createElement('div'); head.className = 'ep-head';
-    var img = document.createElement('img'); img.src = ep.image; img.alt = ''; img.loading = 'lazy';
+    var img = document.createElement('img'); img.src = imgUrl(ep.image); img.alt = ''; img.loading = 'lazy';
     var right = document.createElement('div');
     var meta = document.createElement('div'); meta.className = 'meta';
     meta.innerHTML = (featured ? '<span class="badge">LATEST</span>' : '') +
@@ -128,9 +136,15 @@
     head.appendChild(img); head.appendChild(right);
     card.appendChild(head);
 
-    var audio = document.createElement('audio');
-    audio.controls = true; audio.preload = 'none'; audio.src = ep.audio;
-    card.appendChild(audio);
+    var player = document.createElement('iframe');
+    player.className = 'player'; player.src = embedUrl(ep.audio);
+    player.loading = 'lazy'; player.allow = 'autoplay';
+    player.setAttribute('title', 'Play episode');
+    card.appendChild(player);
+    var dl = document.createElement('a');
+    dl.className = 'openmp3'; dl.href = ep.audio; dl.target = '_blank'; dl.rel = 'noopener';
+    dl.textContent = 'Open the MP3 directly';
+    card.appendChild(dl);
 
     if (ep.summary){
       var s = document.createElement('p'); s.className = 'summary'; s.textContent = ep.summary;
@@ -141,14 +155,10 @@
       var box = document.createElement('div'); box.className = 'chapters';
       var ch = document.createElement('h3'); ch.textContent = 'Chapters'; box.appendChild(ch);
       ep.chapters.forEach(function(c){
-        var b = document.createElement('button'); b.type = 'button';
+        var b = document.createElement('div'); b.className = 'row';
         var t = document.createElement('span'); t.className = 't'; t.textContent = c.label;
         var name = document.createElement('span'); name.textContent = c.title;
         b.appendChild(t); b.appendChild(name);
-        b.addEventListener('click', function(){
-          audio.currentTime = c.t;
-          var p = audio.play(); if (p && p.catch) p.catch(function(){});
-        });
         box.appendChild(b);
       });
       card.appendChild(box);
@@ -160,7 +170,7 @@
     var xml = new DOMParser().parseFromString(xmlText, 'text/xml');
     var chanImg = attr(xml, 'channel > itunes\\:image, channel > image', 'href') ||
                   (xml.querySelector('channel image url') ? xml.querySelector('channel image url').textContent.trim() : '');
-    if (chanImg) document.getElementById('showArt').src = chanImg;
+    if (chanImg) document.getElementById('showArt').src = imgUrl(chanImg);
     var d = txt(xml, 'channel > description'); if (d) document.getElementById('showDesc').textContent = d;
 
     var eps = Array.prototype.map.call(xml.querySelectorAll('item'), function(it){
